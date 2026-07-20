@@ -64,6 +64,9 @@ IDENTIFER_PATTERN = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
 
 WHITESPACE_PATTERN = re.compile(r"\s+")
 
+# TODO: proper function to scan and handle escape sequences n shit
+STRING_PATTERN = re.compile(r'".*?"')
+
 OPERATOR_SCAN_ORDER = [
     '(',
     ')',
@@ -127,6 +130,15 @@ class Lexer:
 
         self.current += len(lexeme)
         return Token(lexeme=lexeme, value=val, offset=self.current, kind = TokenKind.Integer)
+
+    def scan_string(self) -> Token:
+        m = STRING_PATTERN.match(self.source, pos=self.current)
+        assert m is not None, "not an integer"
+        lexeme = m.group()
+        val = m.group().strip('"')
+
+        self.current += len(lexeme)
+        return Token(lexeme=lexeme, value=val, offset=self.current, kind = TokenKind.String)
     
     def scan_identifier_or_keyword(self) -> Token:
         m = IDENTIFER_PATTERN.match(self.source, pos=self.current)
@@ -150,6 +162,7 @@ class Lexer:
 
         raise ValueError(f"not a valid operator: {x}")
     
+    
     def peek(self, offset: int = 0) -> str | None:
         pos = self.current + offset
         if (pos < 0) or (pos >= len(self.source)):
@@ -162,6 +175,9 @@ class Lexer:
         c = self.peek()
         if c is None: return None
 
+        if c == '"':
+            return self.scan_string()
+
         if c.isalpha() or c == '_':
             return self.scan_identifier_or_keyword()
 
@@ -173,7 +189,7 @@ class Lexer:
 
 
 def main():
-    lex = Lexer(">=<<+!= x + 30 + 20 / 9 and x[10 + 1]")
+    lex = Lexer('>=<<+!= x + 30 + 20 /"x" 9 "and  "x[10 + 1]')
 
     while True:
         tok = lex.next_token()
