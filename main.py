@@ -15,7 +15,7 @@ class TokenKind(Enum):
     Dot = "."
     Semicolon = ";"
 
-    Plus = '}'
+    Plus = '+'
     Minus = '-'
     Star = '*'
     Slash = '/'
@@ -58,11 +58,11 @@ class Token:
     kind : TokenKind
 
 
-INTEGER_PATTERN = re.compile(r"^[0-9_]+")
+INTEGER_PATTERN = re.compile(r"[0-9_]+")
 
-IDENTIFER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*")
+IDENTIFER_PATTERN = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
 
-WHITESPACE_PATTERN = re.compile(r"^\s+")
+WHITESPACE_PATTERN = re.compile(r"\s+")
 
 OPERATOR_SCAN_ORDER = [
     '(',
@@ -76,6 +76,7 @@ OPERATOR_SCAN_ORDER = [
     ".",
     ";",
     '}',
+    '+',
     '-',
     '*',
     '/',
@@ -123,10 +124,12 @@ class Lexer:
         assert m is not None, "not an integer"
         lexeme = m.group()
         val = int(m.group())
+
+        self.current += len(lexeme)
         return Token(lexeme=lexeme, value=val, offset=self.current, kind = TokenKind.Integer)
     
     def scan_identifier_or_keyword(self) -> Token:
-        m = INTEGER_PATTERN.match(self.source, pos=self.current)
+        m = IDENTIFER_PATTERN.match(self.source, pos=self.current)
         assert m is not None, "not an identifier"
         lexeme = m.group()
         tok = Token(lexeme=lexeme, value=None, offset=self.current, kind = TokenKind.Identifier)
@@ -135,6 +138,7 @@ class Lexer:
             if lexeme == kw:
                 tok.kind = TokenKind(kw)
 
+        self.current += len(lexeme)
         return tok
 
     def scan_operator(self) -> Token:
@@ -142,19 +146,39 @@ class Lexer:
         for op in OPERATOR_SCAN_ORDER:
             if x.startswith(op):
                 self.current += len(op)
-                return Token(offset=self.current, lexeme=x, value= None, kind=TokenKind(op))
+                return Token(offset=self.current, lexeme=op, value= None, kind=TokenKind(op))
 
-        raise ValueError("not a valid operator")
+        raise ValueError(f"not a valid operator: {x}")
+    
+    def peek(self, offset: int = 0) -> str | None:
+        pos = self.current + offset
+        if (pos < 0) or (pos >= len(self.source)):
+            return None
+        return self.source[pos]
     
     def next_token(self) -> Token | None:
-        pass
+        self.skip_whitespace()
+
+        c = self.peek()
+        if c is None: return None
+
+        if c.isalpha() or c == '_':
+            return self.scan_identifier_or_keyword()
+
+        if c.isnumeric():
+            return self.scan_integer()
+        
+        return self.scan_operator()
+
 
 
 def main():
-    lex = Lexer(">=<<+x + 20 / 9 and x[10 + 1]")
-    print(lex)
-    print(lex.scan_operator())
-    print(lex)
+    lex = Lexer(">=<<+!= x + 30 + 20 / 9 and x[10 + 1]")
+
+    while True:
+        tok = lex.next_token()
+        if tok is None: break
+        print(tok)
 
 
 if __name__ == "__main__":
