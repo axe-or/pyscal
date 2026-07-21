@@ -4,7 +4,6 @@ from enum import Enum
 
 import re
 
-
 class TokenKind(Enum):
     ParenOpen = "("
     ParenClose = ")"
@@ -55,10 +54,10 @@ class TokenKind(Enum):
     EndOfFile = "<eof>"
 
     def is_primary(self) -> bool:
-        return self.name in [TokenKind.Identifier, TokenKind.Integer, TokenKind.String]
+        return self in [TokenKind.Identifier, TokenKind.Integer, TokenKind.String]
     
     def is_operator(self) -> bool:
-        return self.value in OPERATORS
+        return self in OPERATORS
 
 
 @dataclass
@@ -163,7 +162,7 @@ class Lexer:
         assert m is not None, "not an identifier"
         lexeme = m.group()
         tok = Token(
-            lexeme=lexeme, value=None, offset=self.current, kind=TokenKind.Identifier
+            lexeme=lexeme, value=Identifier(lexeme), offset=self.current, kind=TokenKind.Identifier
         )
 
         for kw in KEYWORDS:
@@ -212,9 +211,12 @@ class Lexer:
         self.current = current
         return res
 
+class Identifier(str):
+    pass
+
 @dataclass
 class Node:
-    value: int | float | str | Binary | Unary | Call
+    value: int | float | str | Identifier | Binary | Unary | Call
     parent: Node | None = None
 
 @dataclass
@@ -277,6 +279,9 @@ def prefix_binding_power(op: TokenKind) -> int | None:
     except KeyError:
         return None
 
+
+MIN_BP = -(1 << 31)
+
 @dataclass
 class Parser:
     lexer: Lexer
@@ -317,19 +322,53 @@ class Parser:
             lhs = Node(value=Unary(operator=look.kind, operand=rhs))
         else:
             raise ValueError(f"unexpected token: {look.kind}")
+        
+        while True:
+            op = self.peek()
+
+            l_bp, r_bp = infix_binding_power(op.kind) or (MIN_BP, MIN_BP)
+            if l_bp < min_bp:
+                break
+
+            _ = self.next()
+            if op.kind == TokenKind.SquareOpen:
+                raise NotImplementedError("indexing")
+            elif op.kind == TokenKind.ParenOpen:
+                raise NotImplementedError("call")
+            else:
+                rhs = self._parse_expr(r_bp)
+                lhs = Node(value=Binary(operator=op.kind, left=lhs, right=rhs))
 
         return lhs
-    
+
+def print_node(node: Node) -> str:
+    v = node.value
+    if isinstance(v, Unary):
+        return f"({v.operator.value} {print_node(v.operand)})"
+    elif isinstance(v, Binary):
+        return f"({v.operator.value} {print_node(v.left)} {print_node(v.right)})"
+    elif isinstance(v, Call):
+        args = ' '.join(map(print_node, v.args))
+        return f"(call {print_node(v.callable)} {args})"
+    elif isinstance(v, Identifier):
+        return f"{v}"
+    elif isinstance(v, int):
+        return str(v)
+    elif isinstance(v, str):
+        return v
+    else:
+        raise TypeError(f"invalid node type {type(node)}")
 
 
 def main():
-    lex = Lexer('>=<<+!= x + 30 + 20 /"x" 9 "and  "x[10 + 1]')
+    lex = Lexer('4 + 6 / (8 * 1) and skibidi << 5')
 
-    while True:
-        tok = lex.next_token()
-        if tok.kind == TokenKind.EndOfFile:
-            break
-        print(tok)
+    parser = Parser(lex)
+    node = parser._parse_expr(0)
+
+    x = print_node(node)
+    print(x)
+
 
 if __name__ == "__main__":
     main()
