@@ -29,7 +29,7 @@ class TokenKind(Enum):
     ShLeft = "<<"
     ShRight = ">>"
 
-    Eq = "=="
+    Eq = "="
     NotEq = "!="
     Gt = ">"
     Lt = "<"
@@ -43,9 +43,9 @@ class TokenKind(Enum):
     If = "if"
     Elif = "elif"
     Else = "else"
-    Let = "let"
+    Var = "var"
 
-    Assign = "="
+    Assign = ":="
 
     Identifier = "<id>"
     Integer = "<integer>"
@@ -77,6 +77,32 @@ WHITESPACE_PATTERN = re.compile(r"\s+")
 # TODO: proper function to scan and handle escape sequences n shit
 STRING_PATTERN = re.compile(r'".*?"')
 
+SEPARATORS = {
+    TokenKind.ParenOpen,
+    TokenKind.ParenClose,
+    TokenKind.SquareOpen,
+    TokenKind.SquareClose,
+    TokenKind.CurlyOpen,
+    TokenKind.CurlyClose,
+    TokenKind.Colon,
+    TokenKind.Comma,
+    TokenKind.Dot,
+    TokenKind.Semicolon,
+    TokenKind.Plus,
+    TokenKind.Minus,
+    TokenKind.Star,
+    TokenKind.Slash,
+    TokenKind.Mod,
+    TokenKind.And,
+    TokenKind.Pipe,
+    TokenKind.Tilde,
+    TokenKind.ShLeft,
+    TokenKind.ShRight,
+}
+
+SEPARATOR_SCAN_ORDER = list(map(lambda op: op.value, SEPARATORS))
+SEPARATOR_SCAN_ORDER.sort(reverse=True)
+
 OPERATORS = {
     # Regular operators
     TokenKind.ParenOpen,
@@ -105,18 +131,16 @@ OPERATORS = {
     TokenKind.LogicNot,
 }
 
-OPERATOR_SCAN_ORDER = list(map(lambda op: op.value, OPERATORS))
-OPERATOR_SCAN_ORDER.sort(reverse=True)
-
 KEYWORDS = [
-    "and",
-    "or",
-    "not",
-    "if",
-    "elif",
-    "else",
-    "let",
+    TokenKind.If,
+    TokenKind.Elif,
+    TokenKind.Else,
+    TokenKind.Var,
+    TokenKind.LogicAnd,
+    TokenKind.LogicOr,
+    TokenKind.LogicNot,
 ]
+KEYWORDS = list(map(lambda k: k.value, KEYWORDS))
 KEYWORDS.sort(reverse=True)
 
 
@@ -174,9 +198,9 @@ class Lexer:
         self.current += len(lexeme)
         return tok
 
-    def scan_operator(self) -> Token:
+    def scan_separator(self) -> Token:
         x = self.source[self.current : min(len(self.source), self.current + 2)]
-        for op in OPERATOR_SCAN_ORDER:
+        for op in SEPARATOR_SCAN_ORDER:
             if x.startswith(op):
                 self.current += len(op)
                 return Token(
@@ -207,7 +231,7 @@ class Lexer:
         elif c.isnumeric():
             return self.scan_integer()
         else:
-            return self.scan_operator()
+            return self.scan_separator()
 
     def peek_token(self) -> Token:
         current = self.current
@@ -372,7 +396,6 @@ class Parser:
                 lhs = Node(value=Binary(operator=op.kind, left=lhs, right=rhs))
 
         return lhs
-
 
 
 def main():
