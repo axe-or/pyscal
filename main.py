@@ -225,6 +225,29 @@ class Node:
     value: int | float | str | Identifier | Binary | Unary | Call
     parent: Node | None = None
 
+    def __str__(self) -> str:
+        return _format_node(self)
+
+    
+def _format_node(node: Node) -> str:
+    v = node.value
+    if isinstance(v, Unary):
+        return f"({v.operator.value} {_format_node(v.operand)})"
+    elif isinstance(v, Binary):
+        return f"({v.operator.value} {_format_node(v.left)} {_format_node(v.right)})"
+    elif isinstance(v, Call):
+        args = " ".join(map(_format_node, v.args))
+        return f"(call {_format_node(v.callable)} {args})"
+    elif isinstance(v, Identifier):
+        return f"{v}"
+    elif isinstance(v, int):
+        return str(v)
+    elif isinstance(v, str):
+        return v
+    else:
+        raise TypeError(f"invalid node type {type(node)}")
+
+
 
 @dataclass
 class Binary:
@@ -351,24 +374,6 @@ class Parser:
         return lhs
 
 
-def print_node(node: Node) -> str:
-    v = node.value
-    if isinstance(v, Unary):
-        return f"({v.operator.value} {print_node(v.operand)})"
-    elif isinstance(v, Binary):
-        return f"({v.operator.value} {print_node(v.left)} {print_node(v.right)})"
-    elif isinstance(v, Call):
-        args = " ".join(map(print_node, v.args))
-        return f"(call {print_node(v.callable)} {args})"
-    elif isinstance(v, Identifier):
-        return f"{v}"
-    elif isinstance(v, int):
-        return str(v)
-    elif isinstance(v, str):
-        return v
-    else:
-        raise TypeError(f"invalid node type {type(node)}")
-
 
 def main():
     lex = Lexer("4 + 6 / (8 * 1) and skibidi << 5")
@@ -376,8 +381,7 @@ def main():
     parser = Parser(lex)
     node = parser._parse_expr(0)
 
-    x = print_node(node)
-    print(x)
+    print(node)
 
 
 if __name__ == "__main__":
