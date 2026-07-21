@@ -1,8 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
-
 import re
+
 
 class TokenKind(Enum):
     ParenOpen = "("
@@ -55,7 +55,7 @@ class TokenKind(Enum):
 
     def is_primary(self) -> bool:
         return self in [TokenKind.Identifier, TokenKind.Integer, TokenKind.String]
-    
+
     def is_operator(self) -> bool:
         return self in OPERATORS
 
@@ -99,7 +99,6 @@ OPERATORS = {
     TokenKind.Tilde,
     TokenKind.ShLeft,
     TokenKind.ShRight,
-
     # Keyword operators
     TokenKind.LogicAnd,
     TokenKind.LogicOr,
@@ -162,7 +161,10 @@ class Lexer:
         assert m is not None, "not an identifier"
         lexeme = m.group()
         tok = Token(
-            lexeme=lexeme, value=Identifier(lexeme), offset=self.current, kind=TokenKind.Identifier
+            lexeme=lexeme,
+            value=Identifier(lexeme),
+            offset=self.current,
+            kind=TokenKind.Identifier,
         )
 
         for kw in KEYWORDS:
@@ -194,7 +196,9 @@ class Lexer:
 
         c = self.peek()
         if c is None:
-            return Token(offset=self.current, lexeme="", kind=TokenKind.EndOfFile, value=None)
+            return Token(
+                offset=self.current, lexeme="", kind=TokenKind.EndOfFile, value=None
+            )
 
         if c == '"':
             return self.scan_string()
@@ -211,29 +215,35 @@ class Lexer:
         self.current = current
         return res
 
+
 class Identifier(str):
     pass
+
 
 @dataclass
 class Node:
     value: int | float | str | Identifier | Binary | Unary | Call
     parent: Node | None = None
 
+
 @dataclass
 class Binary:
     operator: TokenKind
-    left:  Node
+    left: Node
     right: Node
+
 
 @dataclass
 class Unary:
     operator: TokenKind
     operand: Node
 
+
 @dataclass
 class Call:
     callable: Node
     args: list[Node]
+
 
 PREFIX_POWER = {
     TokenKind.Plus: 100,
@@ -241,37 +251,35 @@ PREFIX_POWER = {
 }
 
 INFIX_POWER = {
-    TokenKind.SquareOpen:(200, 0),
+    TokenKind.SquareOpen: (200, 0),
     TokenKind.ParenOpen: (200, 0),
-
-    TokenKind.Star:(70, 71),
-    TokenKind.Slash:(70, 71),
-    TokenKind.Mod:(70, 71),
-    TokenKind.And:(70, 71),
-    TokenKind.ShLeft:(70, 71),
+    TokenKind.Star: (70, 71),
+    TokenKind.Slash: (70, 71),
+    TokenKind.Mod: (70, 71),
+    TokenKind.And: (70, 71),
+    TokenKind.ShLeft: (70, 71),
     TokenKind.ShRight: (70, 71),
-
     TokenKind.Plus: (60, 61),
     TokenKind.Minus: (60, 61),
     TokenKind.Pipe: (60, 61),
     TokenKind.Tilde: (60, 61),
-
     TokenKind.Eq: (50, 51),
     TokenKind.NotEq: (50, 51),
     TokenKind.Gt: (50, 51),
     TokenKind.GtEq: (50, 51),
     TokenKind.Lt: (50, 51),
     TokenKind.LtEq: (50, 51),
-
     TokenKind.LogicAnd: (40, 41),
     TokenKind.LogicOr: (30, 31),
 }
+
 
 def infix_binding_power(op: TokenKind) -> tuple[int, int] | None:
     try:
         return INFIX_POWER[op]
     except KeyError:
         return None
+
 
 def prefix_binding_power(op: TokenKind) -> int | None:
     try:
@@ -282,6 +290,7 @@ def prefix_binding_power(op: TokenKind) -> int | None:
 
 MIN_BP = -(1 << 31)
 
+
 @dataclass
 class Parser:
     lexer: Lexer
@@ -291,7 +300,7 @@ class Parser:
 
     def next(self) -> Token:
         return self.lexer.next_token()
-    
+
     def expect(self, target: TokenKind) -> Token:
         tk = self.lexer.next_token()
         if tk.kind != target:
@@ -302,7 +311,7 @@ class Parser:
         look = self.peek()
         if look.kind == TokenKind.EndOfFile:
             raise ValueError("unexpected end of file")
-        
+
         lhs: Node | None = None
         if look.kind.is_primary():
             _ = self.next()
@@ -317,12 +326,12 @@ class Parser:
             r_bp = prefix_binding_power(look.kind)
             if r_bp is None:
                 raise ValueError(f"not a prefix operator: {look.kind}")
-            
+
             rhs = self._parse_expr(r_bp)
             lhs = Node(value=Unary(operator=look.kind, operand=rhs))
         else:
             raise ValueError(f"unexpected token: {look.kind}")
-        
+
         while True:
             op = self.peek()
 
@@ -341,6 +350,7 @@ class Parser:
 
         return lhs
 
+
 def print_node(node: Node) -> str:
     v = node.value
     if isinstance(v, Unary):
@@ -348,7 +358,7 @@ def print_node(node: Node) -> str:
     elif isinstance(v, Binary):
         return f"({v.operator.value} {print_node(v.left)} {print_node(v.right)})"
     elif isinstance(v, Call):
-        args = ' '.join(map(print_node, v.args))
+        args = " ".join(map(print_node, v.args))
         return f"(call {print_node(v.callable)} {args})"
     elif isinstance(v, Identifier):
         return f"{v}"
@@ -361,7 +371,7 @@ def print_node(node: Node) -> str:
 
 
 def main():
-    lex = Lexer('4 + 6 / (8 * 1) and skibidi << 5')
+    lex = Lexer("4 + 6 / (8 * 1) and skibidi << 5")
 
     parser = Parser(lex)
     node = parser._parse_expr(0)
