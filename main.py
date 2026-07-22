@@ -360,6 +360,14 @@ def _format_node(node: Node) -> str:
             else:
                 res.append(f"({decl.sym} {decl.typ})")
         return " ".join(res) + ")"
+    elif isinstance(v, ConstBlock):
+        res = [f"(const"]
+        for decl in v.declarations:
+            if decl.value is not None:
+                res.append(f"({decl.sym} {decl.typ} {_format_node(decl.value)})")
+            else:
+                res.append(f"({decl.sym} {decl.typ})")
+        return " ".join(res) + ")"
     else:
         raise TypeError(f"invalid node type {type(node)}")
 
@@ -461,13 +469,14 @@ class Parser:
 
         top_level: list[Node] = []
 
-
         while True:
             look = self.peek()
             if look.kind == TokenKind.EndOfFile: break
 
             if look.kind == TokenKind.Var:
                 top_level.append(self._parse_var_block())
+            elif look.kind == TokenKind.Const:
+                top_level.append(self._parse_const_block())
             else:
                 raise NotImplemented("bruh")
 
@@ -549,14 +558,38 @@ class Parser:
         return ids
 
     def _parse_const_block(self) -> Node:
-        raise NotImplemented()
+        _ = self.expect(TokenKind.Const)
+        decls: list[IdDecl] = []
 
+        while True:
+            if self.peek().kind != TokenKind.Identifier:
+                break
+
+            ids = self._parse_id_list(TokenKind.Colon)
+
+            _ = self.expect(TokenKind.Colon)
+            typ = self._parse_type()
+
+            exprs = []
+            if self.next_matching(TokenKind.Assign):
+                exprs = self._parse_expr_list(TokenKind.Semicolon)
+
+            _ = self.expect(TokenKind.Semicolon)
+            if len(ids) != len(exprs):
+                raise ValueError(f"all constant expressions must be associated with a expression")
+
+            for (ident, expr) in zip(ids, exprs):
+                decls.append(IdDecl(sym=ident, typ=typ, value=expr))
+        
+        if len(decls) == 0:
+            raise ValueError("empty var declarations are not allowed")
+        
+        return Node(value=ConstBlock(decls))
 
     def _parse_var_block(self) -> Node:
         _ = self.expect(TokenKind.Var)
         decls: list[IdDecl] = []
 
-        # TODO:  initializer expression
         while True:
             if self.peek().kind != TokenKind.Identifier:
                 break

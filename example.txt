@@ -5,3 +5,6 @@ var
     arr0, arr1, arr_foo: []^[6]bool;
     x, y: ^Int;
 
+const
+    hello: bool = true;
+    MAX_WIDTH: int = 0;
