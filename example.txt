@@ -10,4 +10,4 @@ const
     MAX_WIDTH: int = 0;
 
 type
-    A, B = ^int, [6]^int, int;
+    A, B = ^int, [6]^int;

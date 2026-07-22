@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 
+
 class TokenKind(Enum):
     ParenOpen = "("
     ParenClose = ")"
@@ -141,12 +142,10 @@ OPERATORS = {
     TokenKind.Tilde,
     TokenKind.ShLeft,
     TokenKind.ShRight,
-
     # Keyword operators
     TokenKind.LogicAnd,
     TokenKind.LogicOr,
     TokenKind.LogicNot,
-
     # Comparison
     TokenKind.Eq,
     TokenKind.NotEq,
@@ -313,7 +312,20 @@ class Slice:
 
 @dataclass
 class Node:
-    value: int | float | str | Identifier | Binary | Unary | Call | File | Type | VarBlock | ConstBlock | TypeBlock
+    value: (
+        int
+        | float
+        | str
+        | Identifier
+        | Binary
+        | Unary
+        | Call
+        | File
+        | Type
+        | VarBlock
+        | ConstBlock
+        | TypeBlock
+    )
     parent: Node | None = None
 
     def __str__(self) -> str:
@@ -326,22 +338,27 @@ class IdDecl:
     typ: Type
     value: Node | None = None
 
+
 @dataclass
 class TypeDef:
     sym: Identifier
     typ: Type
 
+
 @dataclass
 class VarBlock:
     declarations: list[IdDecl]
+
 
 @dataclass
 class ConstBlock:
     declarations: list[IdDecl]
 
+
 @dataclass
 class TypeBlock:
     definitions: list[TypeDef]
+
 
 def _format_node(node: Node) -> str:
     v = node.value
@@ -387,6 +404,7 @@ def _format_node(node: Node) -> str:
     else:
         raise TypeError(f"invalid node type {type(node)}")
 
+
 @dataclass
 class Binary:
     operator: TokenKind
@@ -398,6 +416,7 @@ class Binary:
 class Unary:
     operator: TokenKind
     operand: Node
+
 
 @dataclass
 class Call:
@@ -449,6 +468,7 @@ def prefix_binding_power(op: TokenKind) -> int | None:
 
 
 MIN_BP = -(1 << 31)
+
 
 @dataclass
 class Parser:
@@ -507,7 +527,6 @@ class Parser:
 
         return nodes
 
-
     def _parse_type(self) -> Type:
         name = self.next_matching(TokenKind.Identifier)
         if name is not None:
@@ -551,7 +570,9 @@ class Parser:
             elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
                 break
             else:
-                end = end_sep.value if end_sep is not None else TokenKind.EndOfFile.value
+                end = (
+                    end_sep.value if end_sep is not None else TokenKind.EndOfFile.value
+                )
                 raise ValueError(f"expected `,` or `{end}`, found: {look}")
 
         if len(exprs) == 0:
@@ -577,7 +598,9 @@ class Parser:
             elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
                 break
             else:
-                end = end_sep.value if end_sep is not None else TokenKind.EndOfFile.value # TODO: Ugly!
+                end = (
+                    end_sep.value if end_sep is not None else TokenKind.EndOfFile.value
+                )  # TODO: Ugly!
                 raise ValueError(f"expected `,` or `{end}`, found: {look}")
 
         if len(types) == 0:
@@ -627,14 +650,16 @@ class Parser:
 
             _ = self.expect(TokenKind.Semicolon)
             if len(ids) != len(exprs):
-                raise ValueError(f"all const definitions must be associated with a expression")
+                raise ValueError(
+                    f"all const definitions must be associated with a expression"
+                )
 
-            for (ident, expr) in zip(ids, exprs):
+            for ident, expr in zip(ids, exprs):
                 decls.append(IdDecl(sym=ident, typ=typ, value=expr))
-        
+
         if len(decls) == 0:
             raise ValueError("empty var declarations are not allowed")
-        
+
         return Node(value=ConstBlock(decls))
 
     def _parse_type_block(self) -> Node:
@@ -652,14 +677,16 @@ class Parser:
 
             _ = self.expect(TokenKind.Semicolon)
             if len(ids) != len(types):
-                raise ValueError(f"all type definitions must be associated with a expression")
+                raise ValueError(
+                    f"all type definitions must be associated with a expression"
+                )
 
-            for (ident, typ) in zip(ids, types):
+            for ident, typ in zip(ids, types):
                 defs.append(TypeDef(sym=ident, typ=typ))
-        
+
         if len(defs) == 0:
             raise ValueError("empty var declarations are not allowed")
-        
+
         return Node(value=TypeBlock(defs))
 
     def _parse_var_block(self) -> Node:
@@ -681,14 +708,16 @@ class Parser:
 
             _ = self.expect(TokenKind.Semicolon)
             if len(ids) != len(exprs):
-                raise ValueError(f"mismatched number of bindigns for expressions {len(ids)} != {len(exprs)}")
+                raise ValueError(
+                    f"mismatched number of bindigns for expressions {len(ids)} != {len(exprs)}"
+                )
 
-            for (ident, expr) in zip(ids, exprs):
+            for ident, expr in zip(ids, exprs):
                 decls.append(IdDecl(sym=ident, typ=typ, value=expr))
-        
+
         if len(decls) == 0:
             raise ValueError("empty var declarations are not allowed")
-        
+
         return Node(value=VarBlock(decls))
 
     def _parse_expr(self, min_bp: int) -> Node:

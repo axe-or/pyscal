@@ -76,7 +76,7 @@ def tokenize(src: str) -> list[Token]:
         start = i
         while i < n:
             c = src[i]
-            if c.isspace() or c in "();" :
+            if c.isspace() or c in "();":
                 break
             i += 1
 
@@ -105,6 +105,7 @@ def parse_sexps(tokens: Iterable[Token]) -> list[Sexp]:
 SKIP_LINE = {"block", "proc", "record", "var", "const", "type", "module"}
 KEEP_N_IN_LINE = {"proc": 2, "record": 2, "module": 2}
 
+
 def format_node(node: Sexp, indent_width: int) -> str:
     if isinstance(node, Token):
         return node.text
@@ -122,7 +123,9 @@ def format_node(node: Sexp, indent_width: int) -> str:
         if len(node) <= keep:
             keep = 1
 
-        prefix = "(" + " ".join(format_node(child, indent_width) for child in node[:keep])
+        prefix = "(" + " ".join(
+            format_node(child, indent_width) for child in node[:keep]
+        )
         children = node[keep:]
 
         if not children:
@@ -130,7 +133,10 @@ def format_node(node: Sexp, indent_width: int) -> str:
 
         lines = [prefix]
         for child in children:
-            lines.extend(" " * indent_width + line for line in format_node(child, indent_width).splitlines())
+            lines.extend(
+                " " * indent_width + line
+                for line in format_node(child, indent_width).splitlines()
+            )
         lines[-1] += ")"
         return "\n".join(lines)
 
