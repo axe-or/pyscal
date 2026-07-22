@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 
-
 class TokenKind(Enum):
     ParenOpen = "("
     ParenClose = ")"
@@ -42,6 +41,7 @@ class TokenKind(Enum):
     LogicNot = "not"
 
     Var = "var"
+    Const = "const"
     Module = "module"
     Begin = "begin"
     End = "end"
@@ -52,7 +52,7 @@ class TokenKind(Enum):
     Then = "then"
     While = "while"
 
-    Assign = ":="
+    Assign = "="
 
     Identifier = "<id>"
     Integer = "<integer>"
@@ -106,6 +106,13 @@ SEPARATORS = {
     TokenKind.Tilde,
     TokenKind.ShLeft,
     TokenKind.ShRight,
+    TokenKind.Assign,
+    TokenKind.Eq,
+    TokenKind.NotEq,
+    TokenKind.Gt,
+    TokenKind.Lt,
+    TokenKind.GtEq,
+    TokenKind.LtEq,
 }
 
 SEPARATOR_SCAN_ORDER: list[str] = list(map(lambda op: op.value, SEPARATORS))
@@ -133,10 +140,19 @@ OPERATORS = {
     TokenKind.Tilde,
     TokenKind.ShLeft,
     TokenKind.ShRight,
+
     # Keyword operators
     TokenKind.LogicAnd,
     TokenKind.LogicOr,
     TokenKind.LogicNot,
+
+    # Comparison
+    TokenKind.Eq,
+    TokenKind.NotEq,
+    TokenKind.Gt,
+    TokenKind.Lt,
+    TokenKind.GtEq,
+    TokenKind.LtEq,
 }
 
 KEYWORDS = [
@@ -144,6 +160,7 @@ KEYWORDS = [
     TokenKind.LogicOr,
     TokenKind.LogicNot,
     TokenKind.Var,
+    TokenKind.Const,
     TokenKind.Module,
     TokenKind.Begin,
     TokenKind.End,
@@ -294,7 +311,7 @@ class Slice:
 
 @dataclass
 class Node:
-    value: int | float | str | Identifier | Binary | Unary | Call | File | Type | VarBlock
+    value: int | float | str | Identifier | Binary | Unary | Call | File | Type | VarBlock | ConstBlock
     parent: Node | None = None
 
     def __str__(self) -> str:
@@ -305,9 +322,14 @@ class Node:
 class IdDecl:
     sym: Identifier
     typ: Type
+    value: Node | None = None
 
 @dataclass
 class VarBlock:
+    declarations: list[IdDecl]
+
+@dataclass
+class ConstBlock:
     declarations: list[IdDecl]
 
 def _format_node(node: Node) -> str:
@@ -333,11 +355,13 @@ def _format_node(node: Node) -> str:
     elif isinstance(v, VarBlock):
         res = [f"(var"]
         for decl in v.declarations:
-            res.append(f"({decl.sym} {decl.typ})")
+            if decl.value is not None:
+                res.append(f"({decl.sym} {decl.typ} {_format_node(decl.value)})")
+            else:
+                res.append(f"({decl.sym} {decl.typ})")
         return " ".join(res) + ")"
     else:
         raise TypeError(f"invalid node type {type(node)}")
-
 
 @dataclass
 class Binary:
@@ -350,7 +374,6 @@ class Binary:
 class Unary:
     operator: TokenKind
     operand: Node
-
 
 @dataclass
 class Call:
@@ -455,7 +478,6 @@ class Parser:
         name = self.next_matching(TokenKind.Identifier)
         if name is not None:
             assert isinstance(name.value, Identifier)
-            print(f'named type: {name}')
             return name.value
 
         if self.next_matching(TokenKind.Caret) is not None:
@@ -477,6 +499,31 @@ class Parser:
             f"expected array, slice, pointer or identifier. found: {self.peek()}"
         )
 
+    def _parse_expr_list(self, end_sep: TokenKind | None) -> list[Node]:
+        exprs: list[Node] = []
+        while True:
+            node = self._parse_expr(0)
+            exprs.append(node)
+
+            look = self.peek()
+            if look.kind == TokenKind.Comma:
+                _ = self.next()
+
+                # Allow trailing comma if next token is the end marker
+                delim = self.peek()
+                if delim.kind == end_sep:
+                    break
+                continue
+            elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
+                break
+            else:
+                raise ValueError(f"expected `,` or `{end_sep.value}`, found: {look}")
+
+        if len(exprs) == 0:
+            raise ValueError(f"expected at least one expression")
+
+        return exprs
+
     def _parse_id_list(self, end_sep: TokenKind) -> list[Identifier]:
         ids: list[Identifier] = []
 
@@ -494,14 +541,16 @@ class Parser:
                 if delim.kind == end_sep:
                     break
                 continue
-            elif look.kind == end_sep:
+            elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
                 break
             else:
                 raise ValueError(f"expected `,` or `{end_sep.value}`, found: {look}")
 
         return ids
 
-    # def _parse_id_decl(self) -> list[IdDecl]:
+    def _parse_const_block(self) -> Node:
+        raise NotImplemented()
+
 
     def _parse_var_block(self) -> Node:
         _ = self.expect(TokenKind.Var)
@@ -516,10 +565,17 @@ class Parser:
 
             _ = self.expect(TokenKind.Colon)
             typ = self._parse_type()
-            _ = self.expect(TokenKind.Semicolon)
 
-            for ident in ids:
-                decls.append(IdDecl(sym=ident, typ=typ))
+            exprs = [None] * len(ids)
+            if self.next_matching(TokenKind.Assign):
+                exprs = self._parse_expr_list(TokenKind.Semicolon)
+
+            _ = self.expect(TokenKind.Semicolon)
+            if len(ids) != len(exprs):
+                raise ValueError(f"mismatched number of bindigns for expressions {len(ids)} != {len(exprs)}")
+
+            for (ident, expr) in zip(ids, exprs):
+                decls.append(IdDecl(sym=ident, typ=typ, value=expr))
         
         if len(decls) == 0:
             raise ValueError("empty var declarations are not allowed")

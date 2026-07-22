@@ -1,7 +1,7 @@
 module my_mod;
 
 var
-    x : Int;
+    x, y : Int = 6, +7 * 3 << (1 / 20) ~ -6 or 6 > 1;
     arr0, arr1, arr_foo: []^[6]bool;
     x, y: ^Int;
 
