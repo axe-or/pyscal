@@ -1,0 +1,30 @@
+
+ModuleDef :=
+    "module" IDENT ";" TopLevelStmt*
+;;
+
+TopLevelStmt :=
+    | ConstDef
+    | TypeDef
+    | VarDef
+    | ProcDecl
+    | ProcDef
+;;
+
+ConstDef :=
+    "const" (IDENT ":" Type ":=" Expr ";")+
+;;
+
+VarDef :=
+    | "var" IDENT ":" Type (":=" Expr)? ";"
+    | "var" "(" (IDENT ":" Type (":=" Expr)? ",")+ ")" ";"
+;;
+
+Type :=
+    | IDENT
+    | "[" Int "]" Type
+    | "[]" Type
+    | "^" Type
+    | "record (" (IDENT ":" Type ",") "end"
+;;
+

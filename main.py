@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import re
 
-
 class TokenKind(Enum):
     ParenOpen = "("
     ParenClose = ")"
@@ -40,10 +39,16 @@ class TokenKind(Enum):
     LogicOr = "or"
     LogicNot = "not"
 
-    If = "if"
-    Elif = "elif"
-    Else = "else"
     Var = "var"
+    Module = "module "
+    Begin = "begin "
+    End = "end "
+    Func = "func "
+    If = "if "
+    Elif = "elif "
+    Else = "else "
+    Then = "then "
+    While = "while "
 
     Assign = ":="
 
@@ -100,7 +105,7 @@ SEPARATORS = {
     TokenKind.ShRight,
 }
 
-SEPARATOR_SCAN_ORDER = list(map(lambda op: op.value, SEPARATORS))
+SEPARATOR_SCAN_ORDER = list(map(lambda op: str(op.value), SEPARATORS))
 SEPARATOR_SCAN_ORDER.sort(reverse=True)
 
 OPERATORS = {
@@ -132,13 +137,20 @@ OPERATORS = {
 }
 
 KEYWORDS = [
-    TokenKind.If,
-    TokenKind.Elif,
-    TokenKind.Else,
-    TokenKind.Var,
     TokenKind.LogicAnd,
     TokenKind.LogicOr,
     TokenKind.LogicNot,
+
+    TokenKind.Var,
+    TokenKind.Module,
+    TokenKind.Begin,
+    TokenKind.End,
+    TokenKind.Func,
+    TokenKind.If,
+    TokenKind.Elif,
+    TokenKind.Else,
+    TokenKind.Then,
+    TokenKind.While,
 ]
 KEYWORDS = list(map(lambda k: k.value, KEYWORDS))
 KEYWORDS.sort(reverse=True)
@@ -243,10 +255,12 @@ class Lexer:
 class Identifier(str):
     pass
 
+class ModuleDecl(str):
+    pass
 
 @dataclass
 class Node:
-    value: int | float | str | Identifier | Binary | Unary | Call
+    value: int | float | str | Identifier | Binary | Unary | Call | ModuleDecl
     parent: Node | None = None
 
     def __str__(self) -> str:
@@ -320,7 +334,6 @@ INFIX_POWER = {
     TokenKind.LogicOr: (30, 31),
 }
 
-
 def infix_binding_power(op: TokenKind) -> tuple[int, int] | None:
     try:
         return INFIX_POWER[op]
@@ -334,9 +347,7 @@ def prefix_binding_power(op: TokenKind) -> int | None:
     except KeyError:
         return None
 
-
 MIN_BP = -(1 << 31)
-
 
 @dataclass
 class Parser:
@@ -353,6 +364,12 @@ class Parser:
         if tk.kind != target:
             raise ValueError(f"expected {target} found {tk.kind}")
         return tk
+    
+    def parse(self) -> Node:
+        return self._parse_expr(0)
+    
+    # def _parse_toplevel():
+
 
     def _parse_expr(self, min_bp: int) -> Node:
         look = self.peek()
@@ -398,8 +415,9 @@ class Parser:
         return lhs
 
 
+
 def main():
-    lex = Lexer("4 + 6 / (8 * 1) and skibidi << 5")
+    lex = Lexer("4 + 6 / (8 * 1) and skibidi << 5 | x")
 
     parser = Parser(lex)
     node = parser._parse_expr(0)
