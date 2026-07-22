@@ -53,6 +53,8 @@ class TokenKind(Enum):
     Else = "else"
     Then = "then"
     While = "while"
+    Proc = "proc"
+    Return = "return"
 
     Assign = "="
 
@@ -160,6 +162,8 @@ KEYWORDS = [
     TokenKind.LogicOr,
     TokenKind.LogicNot,
     TokenKind.Var,
+    TokenKind.Proc,
+    TokenKind.Return,
     TokenKind.Const,
     TokenKind.Type,
     TokenKind.Module,
@@ -325,6 +329,7 @@ class Node:
         | VarBlock
         | ConstBlock
         | TypeBlock
+        | Proc
     )
     parent: Node | None = None
 
@@ -334,15 +339,22 @@ class Node:
 
 @dataclass
 class IdDecl:
-    sym: Identifier
-    typ: Type
+    symbol: Identifier
+    type: Type
     value: Node | None = None
 
+@dataclass
+class Proc:
+    symbol: Identifier
+    parameters: list[IdDecl]
+    return_type: Type | None
+    declarations: list[Node]
+    body: Node
 
 @dataclass
 class TypeDef:
-    sym: Identifier
-    typ: Type
+    symbol: Identifier
+    type: Type
 
 
 @dataclass
@@ -384,23 +396,25 @@ def _format_node(node: Node) -> str:
         res = [f"(var"]
         for defi in v.declarations:
             if defi.value is not None:
-                res.append(f"({defi.sym} {defi.typ} {_format_node(defi.value)})")
+                res.append(f"({defi.symbol} {defi.type} {_format_node(defi.value)})")
             else:
-                res.append(f"({defi.sym} {defi.typ})")
+                res.append(f"({defi.symbol} {defi.type})")
         return " ".join(res) + ")"
     elif isinstance(v, ConstBlock):
         res = [f"(const"]
         for defi in v.declarations:
             if defi.value is not None:
-                res.append(f"({defi.sym} {defi.typ} {_format_node(defi.value)})")
+                res.append(f"({defi.symbol} {defi.type} {_format_node(defi.value)})")
             else:
-                res.append(f"({defi.sym} {defi.typ})")
+                res.append(f"({defi.symbol} {defi.type})")
         return " ".join(res) + ")"
     elif isinstance(v, TypeBlock):
         res = [f"(type"]
         for defi in v.definitions:
-            res.append(f"({defi.sym} {defi.typ})")
+            res.append(f"({defi.symbol} {defi.type})")
         return " ".join(res) + ")"
+    elif isinstance(v, Proc):
+        raise NotImplemented()
     else:
         raise TypeError(f"invalid node type {type(node)}")
 
@@ -522,6 +536,10 @@ class Parser:
                 nodes.append(self._parse_const_block())
             elif look.kind == TokenKind.Type:
                 nodes.append(self._parse_type_block())
+            elif look.kind == TokenKind.Proc:
+                nodes.append(self._parse_proc())
+            elif look.kind == TokenKind.Begin:
+                break
             else:
                 raise NotImplemented("bruh")
 
@@ -655,7 +673,7 @@ class Parser:
                 )
 
             for ident, expr in zip(ids, exprs):
-                decls.append(IdDecl(sym=ident, typ=typ, value=expr))
+                decls.append(IdDecl(symbol=ident, type=typ, value=expr))
 
         if len(decls) == 0:
             raise ValueError("empty var declarations are not allowed")
@@ -682,12 +700,40 @@ class Parser:
                 )
 
             for ident, typ in zip(ids, types):
-                defs.append(TypeDef(sym=ident, typ=typ))
+                defs.append(TypeDef(symbol=ident, type=typ))
 
         if len(defs) == 0:
             raise ValueError("empty var declarations are not allowed")
 
         return Node(value=TypeBlock(defs))
+
+    def _parse_statement_block(self) -> Node:
+        raise NotImplemented()
+
+    def _parse_proc(self) -> Node:
+        _ = self.expect(TokenKind.Proc)
+
+        sym = self.expect(TokenKind.Identifier).value
+        _ = self.expect(TokenKind.ParenOpen)
+        params = self._parse_proc_parameters()
+        _ = self.expect(TokenKind.ParenClose)
+
+        ret_type = None
+        if self.next_matching(TokenKind.Colon) is not None:
+            ret_type = self._parse_type()
+
+        _ = self.expect(TokenKind.Semicolon)
+
+        decls = self._parse_decl_section()
+
+        assert isinstance(sym, Identifier)
+        p = Proc(symbol=sym, parameters=params, return_type=ret_type, declarations=decls, body=Node(value="todo"))
+
+        return Node(value=p)
+
+
+    def _parse_proc_parameters(self) -> list[IdDecl]:
+        raise NotImplemented
 
     def _parse_var_block(self) -> Node:
         _ = self.expect(TokenKind.Var)
@@ -713,7 +759,7 @@ class Parser:
                 )
 
             for ident, expr in zip(ids, exprs):
-                decls.append(IdDecl(sym=ident, typ=typ, value=expr))
+                decls.append(IdDecl(symbol=ident, type=typ, value=expr))
 
         if len(decls) == 0:
             raise ValueError("empty var declarations are not allowed")
