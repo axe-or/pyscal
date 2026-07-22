@@ -42,6 +42,7 @@ class TokenKind(Enum):
 
     Var = "var"
     Const = "const"
+    Type = "type"
     Module = "module"
     Begin = "begin"
     End = "end"
@@ -161,6 +162,7 @@ KEYWORDS = [
     TokenKind.LogicNot,
     TokenKind.Var,
     TokenKind.Const,
+    TokenKind.Type,
     TokenKind.Module,
     TokenKind.Begin,
     TokenKind.End,
@@ -311,7 +313,7 @@ class Slice:
 
 @dataclass
 class Node:
-    value: int | float | str | Identifier | Binary | Unary | Call | File | Type | VarBlock | ConstBlock
+    value: int | float | str | Identifier | Binary | Unary | Call | File | Type | VarBlock | ConstBlock | TypeBlock
     parent: Node | None = None
 
     def __str__(self) -> str:
@@ -325,12 +327,21 @@ class IdDecl:
     value: Node | None = None
 
 @dataclass
+class TypeDef:
+    sym: Identifier
+    typ: Type
+
+@dataclass
 class VarBlock:
     declarations: list[IdDecl]
 
 @dataclass
 class ConstBlock:
     declarations: list[IdDecl]
+
+@dataclass
+class TypeBlock:
+    definitions: list[TypeDef]
 
 def _format_node(node: Node) -> str:
     v = node.value
@@ -354,19 +365,24 @@ def _format_node(node: Node) -> str:
         return " ".join(res) + ")"
     elif isinstance(v, VarBlock):
         res = [f"(var"]
-        for decl in v.declarations:
-            if decl.value is not None:
-                res.append(f"({decl.sym} {decl.typ} {_format_node(decl.value)})")
+        for defi in v.declarations:
+            if defi.value is not None:
+                res.append(f"({defi.sym} {defi.typ} {_format_node(defi.value)})")
             else:
-                res.append(f"({decl.sym} {decl.typ})")
+                res.append(f"({defi.sym} {defi.typ})")
         return " ".join(res) + ")"
     elif isinstance(v, ConstBlock):
         res = [f"(const"]
-        for decl in v.declarations:
-            if decl.value is not None:
-                res.append(f"({decl.sym} {decl.typ} {_format_node(decl.value)})")
+        for defi in v.declarations:
+            if defi.value is not None:
+                res.append(f"({defi.sym} {defi.typ} {_format_node(defi.value)})")
             else:
-                res.append(f"({decl.sym} {decl.typ})")
+                res.append(f"({defi.sym} {defi.typ})")
+        return " ".join(res) + ")"
+    elif isinstance(v, TypeBlock):
+        res = [f"(type"]
+        for defi in v.definitions:
+            res.append(f"({defi.sym} {defi.typ})")
         return " ".join(res) + ")"
     else:
         raise TypeError(f"invalid node type {type(node)}")
@@ -467,21 +483,30 @@ class Parser:
         _ = self.expect(TokenKind.Semicolon)
         assert isinstance(name.value, Identifier)
 
-        top_level: list[Node] = []
-
-        while True:
-            look = self.peek()
-            if look.kind == TokenKind.EndOfFile: break
-
-            if look.kind == TokenKind.Var:
-                top_level.append(self._parse_var_block())
-            elif look.kind == TokenKind.Const:
-                top_level.append(self._parse_const_block())
-            else:
-                raise NotImplemented("bruh")
+        top_level: list[Node] = self._parse_decl_section()
 
         file = Node(value=File(module_name=name.value, top_level=top_level))
         return file
+
+    def _parse_decl_section(self) -> list[Node]:
+        nodes: list[Node] = []
+
+        while True:
+            look = self.peek()
+            if look.kind == TokenKind.EndOfFile:
+                break
+
+            if look.kind == TokenKind.Var:
+                nodes.append(self._parse_var_block())
+            elif look.kind == TokenKind.Const:
+                nodes.append(self._parse_const_block())
+            elif look.kind == TokenKind.Type:
+                nodes.append(self._parse_type_block())
+            else:
+                raise NotImplemented("bruh")
+
+        return nodes
+
 
     def _parse_type(self) -> Type:
         name = self.next_matching(TokenKind.Identifier)
@@ -526,12 +551,39 @@ class Parser:
             elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
                 break
             else:
-                raise ValueError(f"expected `,` or `{end_sep.value}`, found: {look}")
+                end = end_sep.value if end_sep is not None else TokenKind.EndOfFile.value
+                raise ValueError(f"expected `,` or `{end}`, found: {look}")
 
         if len(exprs) == 0:
             raise ValueError(f"expected at least one expression")
 
         return exprs
+
+    def _parse_type_list(self, end_sep: TokenKind) -> list[Type]:
+        types: list[Type] = []
+        while True:
+            typ = self._parse_type()
+            types.append(typ)
+
+            look = self.peek()
+            if look.kind == TokenKind.Comma:
+                _ = self.next()
+
+                # Allow trailing comma if next token is the end marker
+                delim = self.peek()
+                if delim.kind == end_sep:
+                    break
+                continue
+            elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
+                break
+            else:
+                end = end_sep.value if end_sep is not None else TokenKind.EndOfFile.value # TODO: Ugly!
+                raise ValueError(f"expected `,` or `{end}`, found: {look}")
+
+        if len(types) == 0:
+            raise ValueError(f"expected at least one expression")
+
+        return types
 
     def _parse_id_list(self, end_sep: TokenKind) -> list[Identifier]:
         ids: list[Identifier] = []
@@ -570,13 +622,12 @@ class Parser:
             _ = self.expect(TokenKind.Colon)
             typ = self._parse_type()
 
-            exprs = []
-            if self.next_matching(TokenKind.Assign):
-                exprs = self._parse_expr_list(TokenKind.Semicolon)
+            _ = self.expect(TokenKind.Assign)
+            exprs = self._parse_expr_list(TokenKind.Semicolon)
 
             _ = self.expect(TokenKind.Semicolon)
             if len(ids) != len(exprs):
-                raise ValueError(f"all constant expressions must be associated with a expression")
+                raise ValueError(f"all const definitions must be associated with a expression")
 
             for (ident, expr) in zip(ids, exprs):
                 decls.append(IdDecl(sym=ident, typ=typ, value=expr))
@@ -585,6 +636,31 @@ class Parser:
             raise ValueError("empty var declarations are not allowed")
         
         return Node(value=ConstBlock(decls))
+
+    def _parse_type_block(self) -> Node:
+        _ = self.expect(TokenKind.Type)
+        defs: list[TypeDef] = []
+
+        while True:
+            if self.peek().kind != TokenKind.Identifier:
+                break
+
+            ids = self._parse_id_list(TokenKind.Assign)
+
+            _ = self.expect(TokenKind.Assign)
+            types = self._parse_type_list(TokenKind.Semicolon)
+
+            _ = self.expect(TokenKind.Semicolon)
+            if len(ids) != len(types):
+                raise ValueError(f"all type definitions must be associated with a expression")
+
+            for (ident, typ) in zip(ids, types):
+                defs.append(TypeDef(sym=ident, typ=typ))
+        
+        if len(defs) == 0:
+            raise ValueError("empty var declarations are not allowed")
+        
+        return Node(value=TypeBlock(defs))
 
     def _parse_var_block(self) -> Node:
         _ = self.expect(TokenKind.Var)
