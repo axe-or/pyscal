@@ -1,32 +1,5 @@
 module my_mod;
 
 var
-    state : [10]Int =;
-
-type
-    B = record
-        a: ^A;
-    end;
-
-    A = record
-        b: ^B:
-    end;
-
-    Person = record
-        name: string;
-    end;
-
-    Node = record
-        next: ^Node;
-    end;
-
-    Handle = distinct ptr;
-
-proc fib(n: Int): Int;
-var
-    prev : Int = 0;
-    prevPrev : Int = 0;
-begin
-end
-
-# proc main()
+    x : Int;
+    arr: []^[6]bool;

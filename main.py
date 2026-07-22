@@ -1,7 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 import re
+
 
 class TokenKind(Enum):
     ParenOpen = "("
@@ -15,6 +16,7 @@ class TokenKind(Enum):
     Comma = ","
     Dot = "."
     Semicolon = ";"
+    Caret = "^"
 
     Plus = "+"
     Minus = "-"
@@ -40,15 +42,15 @@ class TokenKind(Enum):
     LogicNot = "not"
 
     Var = "var"
-    Module = "module "
-    Begin = "begin "
-    End = "end "
-    Func = "func "
-    If = "if "
-    Elif = "elif "
-    Else = "else "
-    Then = "then "
-    While = "while "
+    Module = "module"
+    Begin = "begin"
+    End = "end"
+    Func = "func"
+    If = "if"
+    Elif = "elif"
+    Else = "else"
+    Then = "then"
+    While = "while"
 
     Assign = ":="
 
@@ -69,7 +71,7 @@ class TokenKind(Enum):
 class Token:
     offset: int
     lexeme: str
-    value: None | int | float | str
+    value: None | int | float | str | Identifier
     kind: TokenKind
 
 
@@ -89,6 +91,7 @@ SEPARATORS = {
     TokenKind.SquareClose,
     TokenKind.CurlyOpen,
     TokenKind.CurlyClose,
+    TokenKind.Caret,
     TokenKind.Colon,
     TokenKind.Comma,
     TokenKind.Dot,
@@ -105,7 +108,7 @@ SEPARATORS = {
     TokenKind.ShRight,
 }
 
-SEPARATOR_SCAN_ORDER = list(map(lambda op: str(op.value), SEPARATORS))
+SEPARATOR_SCAN_ORDER: list[str] = list(map(lambda op: op.value, SEPARATORS))
 SEPARATOR_SCAN_ORDER.sort(reverse=True)
 
 OPERATORS = {
@@ -140,7 +143,6 @@ KEYWORDS = [
     TokenKind.LogicAnd,
     TokenKind.LogicOr,
     TokenKind.LogicNot,
-
     TokenKind.Var,
     TokenKind.Module,
     TokenKind.Begin,
@@ -255,18 +257,59 @@ class Lexer:
 class Identifier(str):
     pass
 
-class ModuleDecl(str):
-    pass
+
+@dataclass
+class File:
+    module_name: Identifier
+    top_level: list[Node]
+
+
+type Type = Pointer | Array | Slice | Identifier
+
+
+@dataclass
+class Pointer:
+    inner: Type
+
+    def __str__(self) -> str:
+        return f"(pointer {self.inner})"
+
+
+@dataclass
+class Array:
+    size: int
+    inner: Type
+
+    def __str__(self) -> str:
+        return f"(array {self.size} {self.inner})"
+
+
+@dataclass
+class Slice:
+    inner: Type
+
+    def __str__(self) -> str:
+        return f"(slice {self.inner})"
+
 
 @dataclass
 class Node:
-    value: int | float | str | Identifier | Binary | Unary | Call | ModuleDecl
+    value: int | float | str | Identifier | Binary | Unary | Call | File | Type | VarBlock
     parent: Node | None = None
 
     def __str__(self) -> str:
         return _format_node(self)
 
-    
+
+@dataclass
+class IdDecl:
+    id: Identifier
+    typ: Type
+
+@dataclass
+class VarBlock:
+    declarations: list[IdDecl]
+
 def _format_node(node: Node) -> str:
     v = node.value
     if isinstance(v, Unary):
@@ -282,9 +325,18 @@ def _format_node(node: Node) -> str:
         return str(v)
     elif isinstance(v, str):
         return v
+    elif isinstance(v, File):
+        res = [f"(module {v.module_name}"]
+        for stmt in v.top_level:
+            res.append(_format_node(stmt))
+        return " ".join(res) + ")"
+    elif isinstance(v, VarBlock):
+        res = [f"(var"]
+        for decl in v.declarations:
+            res.append(f"({decl.id} {decl.typ})")
+        return " ".join(res) + ")"
     else:
         raise TypeError(f"invalid node type {type(node)}")
-
 
 
 @dataclass
@@ -334,6 +386,7 @@ INFIX_POWER = {
     TokenKind.LogicOr: (30, 31),
 }
 
+
 def infix_binding_power(op: TokenKind) -> tuple[int, int] | None:
     try:
         return INFIX_POWER[op]
@@ -347,6 +400,7 @@ def prefix_binding_power(op: TokenKind) -> int | None:
     except KeyError:
         return None
 
+
 MIN_BP = -(1 << 31)
 
 @dataclass
@@ -359,16 +413,97 @@ class Parser:
     def next(self) -> Token:
         return self.lexer.next_token()
 
+    def next_matching(self, desired: TokenKind) -> Token | None:
+        tok = self.lexer.peek_token()
+        if tok.kind != desired:
+            return None
+        _ = self.lexer.next_token()
+        return tok
+
     def expect(self, target: TokenKind) -> Token:
         tk = self.lexer.next_token()
         if tk.kind != target:
             raise ValueError(f"expected {target} found {tk.kind}")
         return tk
-    
+
     def parse(self) -> Node:
-        return self._parse_expr(0)
-    
-    # def _parse_toplevel():
+        return self._parse_file()
+
+    def _parse_file(self) -> Node:
+        # Module header is required
+        _ = self.expect(TokenKind.Module)
+        name = self.expect(TokenKind.Identifier)
+        _ = self.expect(TokenKind.Semicolon)
+        assert isinstance(name.value, Identifier)
+
+        top_level: list[Node] = []
+
+
+        while True:
+            look = self.peek()
+            if look.kind == TokenKind.EndOfFile: break
+
+            if look.kind == TokenKind.Var:
+                top_level.append(self._parse_var_block())
+            else:
+                raise NotImplemented("bruh")
+
+        file = Node(value=File(module_name=name.value, top_level=top_level))
+        return file
+
+    def _parse_type(self) -> Type:
+        name = self.next_matching(TokenKind.Identifier)
+        if name is not None:
+            assert isinstance(name.value, Identifier)
+            print(f'named type: {name}')
+            return name.value
+
+        if self.next_matching(TokenKind.Caret) is not None:
+            return Pointer(inner=self._parse_type())
+
+        if self.next_matching(TokenKind.SquareOpen) is not None:
+            # TODO: Support constants and then any compile-time expression
+            size = self.next_matching(TokenKind.Integer)
+
+            if size is not None:
+                assert isinstance(size.value, int)
+                self.expect(TokenKind.SquareClose)
+                return Array(size=size.value, inner=self._parse_type())
+
+            elif self.next_matching(TokenKind.SquareClose):
+                return Slice(inner=self._parse_type())
+
+        raise ValueError(
+            f"expected array, slice, pointer or identifier. found: {self.peek()}"
+        )
+
+    def _parse_var_block(self) -> Node:
+        _ = self.expect(TokenKind.Var)
+        decls: list[IdDecl] = []
+        # var
+        #   ID : A ;
+        #   ID : B ;
+        #   ID : C ;
+        #   ID : T ;
+
+        while True:
+            look = self.peek()
+
+            if look.kind != TokenKind.Identifier:
+                break
+            
+            name = self.next().value
+            _ = self.expect(TokenKind.Colon)
+            typ = self._parse_type()
+            _ = self.expect(TokenKind.Semicolon)
+
+            assert isinstance(name, Identifier)
+            decls.append(IdDecl(id=name, typ=typ))
+        
+        if len(decls) == 0:
+            raise ValueError("empty var declarations are not allowed")
+        
+        return Node(value=VarBlock(decls))
 
 
     def _parse_expr(self, min_bp: int) -> Node:
@@ -415,13 +550,14 @@ class Parser:
         return lhs
 
 
-
 def main():
-    lex = Lexer("4 + 6 / (8 * 1) and skibidi << 5 | x")
+    src = ""
+    with open("example.txt", "r") as f:
+        src = f.read()
 
+    lex = Lexer(src)
     parser = Parser(lex)
-    node = parser._parse_expr(0)
-
+    node = parser.parse()
     print(node)
 
 
