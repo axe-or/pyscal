@@ -2,4 +2,6 @@ module my_mod;
 
 var
     x : Int;
-    arr: []^[6]bool;
+    arr0, arr1, arr_foo: []^[6]bool;
+    x, y: ^Int;
+

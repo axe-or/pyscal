@@ -303,7 +303,7 @@ class Node:
 
 @dataclass
 class IdDecl:
-    id: Identifier
+    sym: Identifier
     typ: Type
 
 @dataclass
@@ -333,7 +333,7 @@ def _format_node(node: Node) -> str:
     elif isinstance(v, VarBlock):
         res = [f"(var"]
         for decl in v.declarations:
-            res.append(f"({decl.id} {decl.typ})")
+            res.append(f"({decl.sym} {decl.typ})")
         return " ".join(res) + ")"
     else:
         raise TypeError(f"invalid node type {type(node)}")
@@ -477,34 +477,54 @@ class Parser:
             f"expected array, slice, pointer or identifier. found: {self.peek()}"
         )
 
+    def _parse_id_list(self, end_sep: TokenKind) -> list[Identifier]:
+        ids: list[Identifier] = []
+
+        while True:
+            id = self.expect(TokenKind.Identifier)
+            assert isinstance(id.value, Identifier)
+            ids.append(id.value)
+
+            look = self.peek()
+            if look.kind == TokenKind.Comma:
+                _ = self.next()
+
+                # Allow trailing comma if next token is the end marker
+                delim = self.peek()
+                if delim.kind == end_sep:
+                    break
+                continue
+            elif look.kind == end_sep:
+                break
+            else:
+                raise ValueError(f"expected `,` or `{end_sep.value}`, found: {look}")
+
+        return ids
+
+    # def _parse_id_decl(self) -> list[IdDecl]:
+
     def _parse_var_block(self) -> Node:
         _ = self.expect(TokenKind.Var)
         decls: list[IdDecl] = []
-        # var
-        #   ID : A ;
-        #   ID : B ;
-        #   ID : C ;
-        #   ID : T ;
 
+        # TODO:  initializer expression
         while True:
-            look = self.peek()
-
-            if look.kind != TokenKind.Identifier:
+            if self.peek().kind != TokenKind.Identifier:
                 break
-            
-            name = self.next().value
+
+            ids = self._parse_id_list(TokenKind.Colon)
+
             _ = self.expect(TokenKind.Colon)
             typ = self._parse_type()
             _ = self.expect(TokenKind.Semicolon)
 
-            assert isinstance(name, Identifier)
-            decls.append(IdDecl(id=name, typ=typ))
+            for ident in ids:
+                decls.append(IdDecl(sym=ident, typ=typ))
         
         if len(decls) == 0:
             raise ValueError("empty var declarations are not allowed")
         
         return Node(value=VarBlock(decls))
-
 
     def _parse_expr(self, min_bp: int) -> Node:
         look = self.peek()
