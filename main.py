@@ -362,6 +362,9 @@ class TypeDef:
     symbol: Identifier
     type: Type
 
+    def __str__(self) -> str:
+        return f"({self.symbol} {self.type})"
+
 
 @dataclass
 class VarBlock:
@@ -394,27 +397,21 @@ def _format_node(node: Node) -> str:
     elif isinstance(v, str):
         return v
     elif isinstance(v, File):
-        res = [f"(module {v.module_name}"]
-        for stmt in v.top_level:
-            res.append(_format_node(stmt))
-        return " ".join(res) + ")"
+        res = [
+            f"(module {v.module_name}",
+            " ".join(map(_format_node, v.top_level)),
+            ")",
+        ]
+        return " ".join(res)
     elif isinstance(v, VarBlock):
-        res = [f"(var"] + list(map(str, v.declarations))
-        return " ".join(res) + ")"
-
+        res = [f"(var", ' '.join(map(str, v.declarations)), ")"]
+        return " ".join(res)
     elif isinstance(v, ConstBlock):
-        res = [f"(const"]
-        for defi in v.declarations:
-            if defi.value is not None:
-                res.append(f"({defi.symbol} {defi.type} {_format_node(defi.value)})")
-            else:
-                res.append(f"({defi.symbol} {defi.type})")
-        return " ".join(res) + ")"
+        res = [f"(const", ' '.join(map(str, v.declarations)), ")"]
+        return " ".join(res)
     elif isinstance(v, TypeBlock):
-        res = [f"(type"]
-        for defi in v.definitions:
-            res.append(f"({defi.symbol} {defi.type})")
-        return " ".join(res) + ")"
+        res = [f"(type", ' '.join(map(str, v.definitions)), ")"]
+        return " ".join(res)
     elif isinstance(v, Proc):
         res = [
             f"(proc {v.symbol}",

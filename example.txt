@@ -13,3 +13,4 @@ type
     A, B = ^int, [6]^int;
 
 proc foo(x: Int, bar, baz: Person, ok, nok: bool, skibidi: gyatt): bool;
+
