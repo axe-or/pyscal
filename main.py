@@ -201,9 +201,7 @@ class Lexer:
         val = int(m.group())
 
         self.current += len(lexeme)
-        return Token(
-            lexeme=lexeme, value=val, offset=self.current, kind=TokenKind.Integer
-        )
+        return Token(lexeme=lexeme, value=val, offset=self.current, kind=TokenKind.Integer)
 
     def scan_string(self) -> Token:
         m = STRING_PATTERN.match(self.source, pos=self.current)
@@ -212,9 +210,7 @@ class Lexer:
         val = m.group().strip('"')
 
         self.current += len(lexeme)
-        return Token(
-            lexeme=lexeme, value=val, offset=self.current, kind=TokenKind.String
-        )
+        return Token(lexeme=lexeme, value=val, offset=self.current, kind=TokenKind.String)
 
     def scan_identifier_or_keyword(self) -> Token:
         m = IDENTIFER_PATTERN.match(self.source, pos=self.current)
@@ -239,9 +235,7 @@ class Lexer:
         for op in SEPARATOR_SCAN_ORDER:
             if x.startswith(op):
                 self.current += len(op)
-                return Token(
-                    offset=self.current, lexeme=op, value=None, kind=TokenKind(op)
-                )
+                return Token(offset=self.current, lexeme=op, value=None, kind=TokenKind(op))
 
         raise ValueError(f"not a valid operator: {x}")
 
@@ -256,9 +250,7 @@ class Lexer:
 
         c = self.peek()
         if c is None:
-            return Token(
-                offset=self.current, lexeme="", kind=TokenKind.EndOfFile, value=None
-            )
+            return Token(offset=self.current, lexeme="", kind=TokenKind.EndOfFile, value=None)
 
         if c == '"':
             return self.scan_string()
@@ -349,6 +341,7 @@ class IdDecl:
         else:
             return f"({self.symbol} {self.type})"
 
+
 @dataclass
 class Proc:
     symbol: Identifier
@@ -356,6 +349,7 @@ class Proc:
     return_type: Type | None
     declarations: list[Node]
     body: Node
+
 
 @dataclass
 class TypeDef:
@@ -404,13 +398,13 @@ def _format_node(node: Node) -> str:
         ]
         return " ".join(res)
     elif isinstance(v, VarBlock):
-        res = [f"(var", ' '.join(map(str, v.declarations)), ")"]
+        res = [f"(var", " ".join(map(str, v.declarations)), ")"]
         return " ".join(res)
     elif isinstance(v, ConstBlock):
-        res = [f"(const", ' '.join(map(str, v.declarations)), ")"]
+        res = [f"(const", " ".join(map(str, v.declarations)), ")"]
         return " ".join(res)
     elif isinstance(v, TypeBlock):
-        res = [f"(type", ' '.join(map(str, v.definitions)), ")"]
+        res = [f"(type", " ".join(map(str, v.definitions)), ")"]
         return " ".join(res)
     elif isinstance(v, Proc):
         res = [
@@ -571,9 +565,7 @@ class Parser:
             elif self.next_matching(TokenKind.SquareClose):
                 return Slice(inner=self._parse_type())
 
-        raise ValueError(
-            f"expected array, slice, pointer or identifier. found: {self.peek()}"
-        )
+        raise ValueError(f"expected array, slice, pointer or identifier. found: {self.peek()}")
 
     def _parse_expr_list(self, end_sep: TokenKind | None) -> list[Node]:
         exprs: list[Node] = []
@@ -593,9 +585,7 @@ class Parser:
             elif look.kind == end_sep or look.kind == TokenKind.EndOfFile:
                 break
             else:
-                end = (
-                    end_sep.value if end_sep is not None else TokenKind.EndOfFile.value
-                )
+                end = end_sep.value if end_sep is not None else TokenKind.EndOfFile.value
                 raise ValueError(f"expected `,` or `{end}`, found: {look}")
 
         if len(exprs) == 0:
@@ -673,9 +663,7 @@ class Parser:
 
             _ = self.expect(TokenKind.Semicolon)
             if len(ids) != len(exprs):
-                raise ValueError(
-                    f"all const definitions must be associated with a expression"
-                )
+                raise ValueError(f"all const definitions must be associated with a expression")
 
             for ident, expr in zip(ids, exprs):
                 decls.append(IdDecl(symbol=ident, type=typ, value=expr))
@@ -700,9 +688,7 @@ class Parser:
 
             _ = self.expect(TokenKind.Semicolon)
             if len(ids) != len(types):
-                raise ValueError(
-                    f"all type definitions must be associated with a expression"
-                )
+                raise ValueError(f"all type definitions must be associated with a expression")
 
             for ident, typ in zip(ids, types):
                 defs.append(TypeDef(symbol=ident, type=typ))
@@ -733,13 +719,18 @@ class Parser:
         decls = self._parse_decl_section()
 
         assert isinstance(sym, Identifier)
-        p = Proc(symbol=sym, parameters=params, return_type=ret_type, declarations=decls, body=Node(value="todo"))
+        p = Proc(
+            symbol=sym,
+            parameters=params,
+            return_type=ret_type,
+            declarations=decls,
+            body=Node(value="todo"),
+        )
 
         return Node(value=p)
 
-
     def _parse_param_chain(self):
-        '''Parse a set of params (1 or more) sharing the same type'''
+        """Parse a set of params (1 or more) sharing the same type"""
         params: list[IdDecl] = []
         while True:
             if self.peek().kind != TokenKind.Identifier:
@@ -757,7 +748,6 @@ class Parser:
             raise ValueError("expected at least one parameter")
 
         return params
-
 
     def _parse_proc_parameters(self) -> list[IdDecl]:
         params: list[IdDecl] = []

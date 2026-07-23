@@ -123,9 +123,7 @@ def format_node(node: Sexp, indent_width: int) -> str:
         if len(node) <= keep:
             keep = 1
 
-        prefix = "(" + " ".join(
-            format_node(child, indent_width) for child in node[:keep]
-        )
+        prefix = "(" + " ".join(format_node(child, indent_width) for child in node[:keep])
         children = node[keep:]
 
         if not children:
@@ -134,8 +132,7 @@ def format_node(node: Sexp, indent_width: int) -> str:
         lines = [prefix]
         for child in children:
             lines.extend(
-                " " * indent_width + line
-                for line in format_node(child, indent_width).splitlines()
+                " " * indent_width + line for line in format_node(child, indent_width).splitlines()
             )
         lines[-1] += ")"
         return "\n".join(lines)
