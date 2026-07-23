@@ -343,6 +343,12 @@ class IdDecl:
     type: Type
     value: Node | None = None
 
+    def __str__(self) -> str:
+        if self.value is not None:
+            return f"({self.symbol} {self.type} {_format_node(self.value)})"
+        else:
+            return f"({self.symbol} {self.type})"
+
 @dataclass
 class Proc:
     symbol: Identifier
@@ -393,13 +399,9 @@ def _format_node(node: Node) -> str:
             res.append(_format_node(stmt))
         return " ".join(res) + ")"
     elif isinstance(v, VarBlock):
-        res = [f"(var"]
-        for defi in v.declarations:
-            if defi.value is not None:
-                res.append(f"({defi.symbol} {defi.type} {_format_node(defi.value)})")
-            else:
-                res.append(f"({defi.symbol} {defi.type})")
+        res = [f"(var"] + list(map(str, v.declarations))
         return " ".join(res) + ")"
+
     elif isinstance(v, ConstBlock):
         res = [f"(const"]
         for defi in v.declarations:
@@ -414,7 +416,13 @@ def _format_node(node: Node) -> str:
             res.append(f"({defi.symbol} {defi.type})")
         return " ".join(res) + ")"
     elif isinstance(v, Proc):
-        raise NotImplemented()
+        res = [
+            f"(proc {v.symbol}",
+            f"(returns {v.return_type})",
+            f"(params {' '.join(map(str, v.parameters))})",
+            ")",
+        ]
+        return " ".join(res)
     else:
         raise TypeError(f"invalid node type {type(node)}")
 
@@ -724,6 +732,7 @@ class Parser:
 
         _ = self.expect(TokenKind.Semicolon)
 
+        # TODO: BOdy
         decls = self._parse_decl_section()
 
         assert isinstance(sym, Identifier)
@@ -732,8 +741,51 @@ class Parser:
         return Node(value=p)
 
 
+    def _parse_param_chain(self):
+        '''Parse a set of params (1 or more) sharing the same type'''
+        params: list[IdDecl] = []
+        while True:
+            if self.peek().kind != TokenKind.Identifier:
+                break
+
+            ids = self._parse_id_list(TokenKind.Colon)
+
+            _ = self.expect(TokenKind.Colon)
+            typ = self._parse_type()
+
+            for ident in ids:
+                params.append(IdDecl(symbol=ident, type=typ))
+
+        if len(params) == 0:
+            raise ValueError("expected at least one parameter")
+
+        return params
+
+
     def _parse_proc_parameters(self) -> list[IdDecl]:
-        raise NotImplemented
+        params: list[IdDecl] = []
+        while True:
+            if self.peek().kind != TokenKind.Identifier:
+                break
+
+            p = self._parse_param_chain()
+            params += p
+
+            look = self.peek()
+            if look.kind == TokenKind.Comma:
+                _ = self.next()
+
+                # Allow trailing comma if next token is the end marker
+                if self.peek().kind == TokenKind.ParenClose:
+                    break
+
+                continue
+            elif look.kind == TokenKind.ParenClose or look.kind == TokenKind.EndOfFile:
+                break
+            else:
+                raise ValueError(f"expected `,` or `)`, found: {look}")
+
+        return params
 
     def _parse_var_block(self) -> Node:
         _ = self.expect(TokenKind.Var)

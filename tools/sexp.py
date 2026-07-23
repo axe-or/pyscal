@@ -102,7 +102,7 @@ def parse_sexps(tokens: Iterable[Token]) -> list[Sexp]:
     return stack[0]
 
 
-SKIP_LINE = {"block", "proc", "record", "var", "const", "type", "module"}
+SKIP_LINE = {"block", "proc", "params", "record", "var", "const", "type", "module"}
 KEEP_N_IN_LINE = {"proc": 2, "record": 2, "module": 2}
 
 
